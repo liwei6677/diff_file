@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diff 工具</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.6rem;
+      margin-bottom: 20px;
+      color: #1a1a2e;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .mode-btn {
+      padding: 8px 22px;
+      border: 2px solid #4a6fa5;
+      border-radius: 6px;
+      background: #fff;
+      color: #4a6fa5;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .mode-btn.active {
+      background: #4a6fa5;
+      color: #fff;
+    }
+
+    .mode-btn:hover:not(.active) {
+      background: #e8eef6;
+    }
+
+    .diff-btn {
+      padding: 8px 28px;
+      border: none;
+      border-radius: 6px;
+      background: #27ae60;
+      color: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .diff-btn:hover { background: #219a52; }
+
+    .clear-btn {
+      padding: 8px 20px;
+      border: 2px solid #bbb;
+      border-radius: 6px;
+      background: #fff;
+      color: #666;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .clear-btn:hover { background: #f5f5f5; }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .input-panel label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #555;
+    }
+
+    .input-panel textarea {
+      width: 100%;
+      height: 260px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.88rem;
+      resize: vertical;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-panel textarea:focus { border-color: #4a6fa5; }
+
+    /* ── result area ── */
+    #result {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      min-height: 80px;
+    }
+
+    #result .empty-hint {
+      text-align: center;
+      color: #aaa;
+      padding: 24px 0;
+    }
+
+    /* ── legend ── */
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    /* ── line diff ── */
+    .line-diff-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.87rem;
+    }
+
+    .line-diff-table th {
+      background: #f7f7f7;
+      border-bottom: 2px solid #ddd;
+      padding: 6px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .line-diff-table td {
+      padding: 4px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .line-diff-table .ln {
+      color: #aaa;
+      user-select: none;
+      min-width: 32px;
+      text-align: right;
+      padding-right: 14px;
+      font-size: 0.8rem;
+    }
+
+    tr.added   td { background: #e6ffed; }
+    tr.removed td { background: #ffeef0; }
+    tr.changed td { background: #fff8e1; }
+    tr.equal   td { background: #fff;    }
+
+    .added-mark   { color: #27ae60; font-weight: bold; margin-right: 4px; }
+    .removed-mark { color: #e74c3c; font-weight: bold; margin-right: 4px; }
+    .changed-mark { color: #f39c12; font-weight: bold; margin-right: 4px; }
+
+    /* inline char diff */
+    ins  { background: #b7f0c8; text-decoration: none; border-radius: 2px; padding: 0 1px; }
+    del  { background: #fdb8c0; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+
+    /* ── json diff ── */
+    .json-diff-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.87rem;
+    }
+
+    .json-diff-table th {
+      background: #f7f7f7;
+      border-bottom: 2px solid #ddd;
+      padding: 6px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .json-diff-table td {
+      padding: 5px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      word-break: break-all;
+    }
+
+    .json-diff-table tr.added   td { background: #e6ffed; }
+    .json-diff-table tr.removed td { background: #ffeef0; }
+    .json-diff-table tr.changed td { background: #fff8e1; }
+    .json-diff-table tr.equal   td { background: #fff; }
+
+    .key-col { color: #2980b9; font-weight: 600; }
+    .val-col { color: #444; }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 1px 6px;
+      border-radius: 10px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .badge.add  { background: #27ae60; color: #fff; }
+    .badge.del  { background: #e74c3c; color: #fff; }
+    .badge.chg  { background: #f39c12; color: #fff; }
+
+    .error-msg {
+      color: #e74c3c;
+      background: #ffeef0;
+      border: 1px solid #fdb8c0;
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+    }
+
+    .summary {
+      font-size: 0.88rem;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    @media (max-width: 640px) {
+      .input-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>✦ Diff 工具</h1>
+
+  <div class="toolbar">
+    <button class="mode-btn active" id="btn-text" onclick="setMode('text')">文本对比（逐行）</button>
+    <button class="mode-btn"        id="btn-json" onclick="setMode('json')">JSON 对比（Key-Value）</button>
+    <button class="diff-btn"  onclick="runDiff()">开始对比</button>
+    <button class="clear-btn" onclick="clearAll()">清空</button>
+  </div>
+
+  <div class="input-row">
+    <div class="input-panel">
+      <label>原始内容（左）</label>
+      <textarea id="left"  placeholder="请输入原始内容…"></textarea>
+    </div>
+    <div class="input-panel">
+      <label>对比内容（右）</label>
+      <textarea id="right" placeholder="请输入对比内容…"></textarea>
+    </div>
+  </div>
+
+  <div id="result">
+    <p class="empty-hint">点击「开始对比」查看差异结果</p>
+  </div>
+
+  <script>
+    /* ───────────── state ───────────── */
+    let mode = 'text';
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById('btn-text').classList.toggle('active', m === 'text');
+      document.getElementById('btn-json').classList.toggle('active', m === 'json');
+    }
+
+    function clearAll() {
+      document.getElementById('left').value  = '';
+      document.getElementById('right').value = '';
+      document.getElementById('result').innerHTML = '<p class="empty-hint">点击「开始对比」查看差异结果</p>';
+    }
+
+    /* ───────────── entry point ───────────── */
+    function runDiff() {
+      const left  = document.getElementById('left').value;
+      const right = document.getElementById('right').value;
+      const result = document.getElementById('result');
+
+      if (mode === 'json') {
+        result.innerHTML = renderJsonDiff(left, right);
+      } else {
+        result.innerHTML = renderLineDiff(left, right);
+      }
+    }
+
+    /* ═══════════════════════════════════════
+       LINE DIFF
+       Uses a simple LCS-based diff algorithm
+       ═══════════════════════════════════════ */
+    const LINE_LIMIT = 5000;
+    function renderLineDiff(leftText, rightText) {
+      const lLines = splitLines(leftText);
+      const rLines = splitLines(rightText);
+      if (lLines.length > LINE_LIMIT || rLines.length > LINE_LIMIT) {
+        return `<div class="error-msg">⚠️ 输入行数超过 ${LINE_LIMIT} 行限制，请缩短输入内容后再对比。</div>`;
+      }
+      const ops    = lcs_diff(lLines, rLines);
+
+      let addedCount = 0, removedCount = 0, changedCount = 0;
+
+      let rows = '';
+      let i = 0;
+      while (i < ops.length) {
+        const op = ops[i];
+
+        /* pair a remove immediately followed by an add → "changed" */
+        if (op.type === 'remove' && i + 1 < ops.length && ops[i + 1].type === 'add') {
+          const leftLine  = op.value;
+          const rightLine = ops[i + 1].value;
+          const { leftHtml, rightHtml } = charDiff(leftLine, rightLine);
+          changedCount++;
+          rows += `
+            <tr class="changed">
+              <td class="ln">${op.ln}</td>
+              <td><span class="changed-mark">≠</span>${leftHtml}</td>
+              <td class="ln">${ops[i+1].ln}</td>
+              <td><span class="changed-mark">≠</span>${rightHtml}</td>
+            </tr>`;
+          i += 2;
+          continue;
+        }
+
+        if (op.type === 'remove') {
+          removedCount++;
+          rows += `
+            <tr class="removed">
+              <td class="ln">${op.ln}</td>
+              <td><span class="removed-mark">−</span>${escHtml(op.value)}</td>
+              <td class="ln"></td>
+              <td></td>
+            </tr>`;
+        } else if (op.type === 'add') {
+          addedCount++;
+          rows += `
+            <tr class="added">
+              <td class="ln"></td>
+              <td></td>
+              <td class="ln">${op.ln}</td>
+              <td><span class="added-mark">+</span>${escHtml(op.value)}</td>
+            </tr>`;
+        } else {
+          rows += `
+            <tr class="equal">
+              <td class="ln">${op.ln}</td>
+              <td>${escHtml(op.value)}</td>
+              <td class="ln">${op.rln}</td>
+              <td>${escHtml(op.value)}</td>
+            </tr>`;
+        }
+        i++;
+      }
+
+      if (!rows) {
+        return '<p class="empty-hint">✔ 内容完全相同，无差异</p>';
+      }
+
+      const total = addedCount + removedCount + changedCount;
+      const summary = `<p class="summary">共 <strong>${total}</strong> 处差异：
+        <span style="color:#27ae60">新增 ${addedCount}</span> ／
+        <span style="color:#e74c3c">删除 ${removedCount}</span> ／
+        <span style="color:#f39c12">修改 ${changedCount}</span>
+      </p>`;
+
+      const legend = `
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#e6ffed;border:1px solid #b2dfdb"></span> 新增</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ffeef0;border:1px solid #fdb8c0"></span> 删除</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#fff8e1;border:1px solid #ffe082"></span> 修改</span>
+        </div>`;
+
+      return `${summary}${legend}
+        <table class="line-diff-table">
+          <thead>
+            <tr>
+              <th style="width:36px">#</th>
+              <th>原始内容（左）</th>
+              <th style="width:36px">#</th>
+              <th>对比内容（右）</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    /* LCS diff — returns array of {type, value, ln, rln} */
+    function lcs_diff(a, b) {
+      const m = a.length, n = b.length;
+      /* build LCS table */
+      const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+        }
+      }
+      /* back-track */
+      const ops = [];
+      let i = m, j = n;
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && a[i-1] === b[j-1]) {
+          ops.push({ type: 'equal', value: a[i-1], ln: i, rln: j });
+          i--; j--;
+        } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+          ops.push({ type: 'add', value: b[j-1], ln: j });
+          j--;
+        } else {
+          ops.push({ type: 'remove', value: a[i-1], ln: i });
+          i--;
+        }
+      }
+      return ops.reverse();
+    }
+
+    /* ───── character-level diff for changed lines ───── */
+    function charDiff(a, b) {
+      const ac = [...a], bc = [...b];
+      const ops = lcs_diff(ac, bc);
+      let leftHtml = '', rightHtml = '';
+      for (const op of ops) {
+        if (op.type === 'equal') {
+          const s = escHtml(op.value);
+          leftHtml  += s;
+          rightHtml += s;
+        } else if (op.type === 'remove') {
+          leftHtml += `<del>${escHtml(op.value)}</del>`;
+        } else {
+          rightHtml += `<ins>${escHtml(op.value)}</ins>`;
+        }
+      }
+      return { leftHtml, rightHtml };
+    }
+
+    /* ═══════════════════════════════════════
+       JSON DIFF
+       ═══════════════════════════════════════ */
+    function renderJsonDiff(leftText, rightText) {
+      let leftObj, rightObj;
+      try { leftObj  = JSON.parse(leftText.trim());  } catch(e) {
+        return `<div class="error-msg">❌ 左侧 JSON 解析失败：${escHtml(e.message)}</div>`;
+      }
+      try { rightObj = JSON.parse(rightText.trim()); } catch(e) {
+        return `<div class="error-msg">❌ 右侧 JSON 解析失败：${escHtml(e.message)}</div>`;
+      }
+
+      const diffs = flatDiff(leftObj, rightObj);
+
+      if (diffs.length === 0) {
+        return '<p class="empty-hint">✔ JSON 内容完全相同，无差异</p>';
+      }
+
+      let addedCount = 0, removedCount = 0, changedCount = 0;
+      let rows = '';
+      for (const d of diffs) {
+        if (d.type === 'added')   addedCount++;
+        if (d.type === 'removed') removedCount++;
+        if (d.type === 'changed') changedCount++;
+
+        let badge = '';
+        if      (d.type === 'added')   badge = '<span class="badge add">新增</span>';
+        else if (d.type === 'removed') badge = '<span class="badge del">删除</span>';
+        else if (d.type === 'changed') badge = '<span class="badge chg">修改</span>';
+
+        rows += `
+          <tr class="${d.type === 'added' ? 'added' : d.type === 'removed' ? 'removed' : d.type === 'changed' ? 'changed' : 'equal'}">
+            <td class="key-col">${escHtml(d.path)}${badge}</td>
+            <td class="val-col">${d.leftVal  !== undefined ? escHtml(jsonVal(d.leftVal))  : '<span style="color:#bbb">—</span>'}</td>
+            <td class="val-col">${d.rightVal !== undefined ? escHtml(jsonVal(d.rightVal)) : '<span style="color:#bbb">—</span>'}</td>
+          </tr>`;
+      }
+
+      const total = addedCount + removedCount + changedCount;
+      const summary = `<p class="summary">共 <strong>${total}</strong> 处差异：
+        <span style="color:#27ae60">新增 ${addedCount}</span> ／
+        <span style="color:#e74c3c">删除 ${removedCount}</span> ／
+        <span style="color:#f39c12">修改 ${changedCount}</span>
+      </p>`;
+
+      const legend = `
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#e6ffed;border:1px solid #b2dfdb"></span> 新增</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ffeef0;border:1px solid #fdb8c0"></span> 删除</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#fff8e1;border:1px solid #ffe082"></span> 修改</span>
+        </div>`;
+
+      return `${summary}${legend}
+        <table class="json-diff-table">
+          <thead>
+            <tr>
+              <th>Key（路径）</th>
+              <th>原始值（左）</th>
+              <th>对比值（右）</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    /* flatten nested JSON and diff key paths */
+    function flatDiff(left, right, prefix) {
+      prefix = prefix || '';
+      const results = [];
+      const leftFlat  = flattenJson(left,  prefix);
+      const rightFlat = flattenJson(right, prefix);
+      const allKeys   = new Set([...Object.keys(leftFlat), ...Object.keys(rightFlat)]);
+
+      for (const key of [...allKeys].sort()) {
+        const lv = leftFlat[key];
+        const rv = rightFlat[key];
+        if (lv === undefined) {
+          results.push({ path: key, type: 'added',   leftVal: undefined, rightVal: rv });
+        } else if (rv === undefined) {
+          results.push({ path: key, type: 'removed',  leftVal: lv, rightVal: undefined });
+        } else if (stableStringify(lv) !== stableStringify(rv)) {
+          results.push({ path: key, type: 'changed', leftVal: lv, rightVal: rv });
+        }
+      }
+      return results;
+    }
+
+    /* flatten a nested object/array to dot-notation + indexed keys */
+    function flattenJson(obj, prefix) {
+      prefix = prefix || '';
+      const result = {};
+      if (obj === null || typeof obj !== 'object') {
+        result[prefix || '(root)'] = obj;
+        return result;
+      }
+      if (Array.isArray(obj)) {
+        if (obj.length === 0) {
+          result[prefix || '(root)'] = obj;
+          return result;
+        }
+        obj.forEach((item, idx) => {
+          const newKey = prefix ? `${prefix}[${idx}]` : `[${idx}]`;
+          Object.assign(result, flattenJson(item, newKey));
+        });
+        return result;
+      }
+      const keys = Object.keys(obj);
+      if (keys.length === 0) {
+        result[prefix || '(root)'] = obj;
+        return result;
+      }
+      for (const k of keys) {
+        const newKey = prefix ? `${prefix}.${k}` : k;
+        Object.assign(result, flattenJson(obj[k], newKey));
+      }
+      return result;
+    }
+
+    /* ───── helpers ───── */
+    /* Order-stable JSON stringify for deep equality comparison */
+    function stableStringify(v) {
+      if (v === null || typeof v !== 'object') return JSON.stringify(v);
+      if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
+      return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableStringify(v[k])).join(',') + '}';
+    }
+
+    function splitLines(text) {
+      return text === '' ? [] : text.split('\n');
+    }
+
+    function escHtml(str) {
+      if (str === undefined || str === null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function jsonVal(v) {
+      if (typeof v === 'string') return v;
+      return JSON.stringify(v);
+    }
+  </script>
+</body>
+</html>
