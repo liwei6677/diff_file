@@ -2,14 +2,33 @@
 
 一个轻量级的文本 / JSON 对比工具，提供浏览器界面和 HTTP API 两种使用方式。
 
+## 🌐 在线访问（GitHub Pages）
+
+无需安装任何依赖，直接在浏览器中使用：
+
+👉 **[https://liwei6677.github.io/diff_file/](https://liwei6677.github.io/diff_file/)**
+
+> 页面基于纯前端 JavaScript 实现，所有对比逻辑均在浏览器本地执行，无需服务端。
+
 ## 功能
 
 - **文本对比**（逐行）：基于 LCS 算法，支持字符级内联差异展示
 - **JSON 对比**（Key-Value）：将嵌套 JSON 展开为点号路径后逐 key 比较
-- **浏览器界面**：访问 `/` 即可使用可视化对比工具
-- **HTTP API**：通过 REST 接口以编程方式调用对比功能
+- **浏览器界面**：访问在线地址或本地服务即可使用可视化对比工具
+- **HTTP API**：通过 REST 接口以编程方式调用对比功能（需本地运行 Go 服务）
 
-## 快速开始
+## 部署
+
+### 静态部署（GitHub Pages）
+
+仓库已配置 GitHub Actions 工作流（`.github/workflows/pages.yml`），每次推送到 `main` 分支时自动部署到 GitHub Pages。
+
+**首次启用步骤：**
+1. 打开仓库 **Settings → Pages**。
+2. 在 **Build and deployment → Source** 下选择 **GitHub Actions**。
+3. 等待约 1-2 分钟，页面即可通过 `https://liwei6677.github.io/diff_file/` 访问。
+
+### 本地运行（含 Go 后端）
 
 ```bash
 go run .
